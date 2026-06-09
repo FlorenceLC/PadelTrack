@@ -6,7 +6,6 @@
 <title>PadelTrack — Gestion de matchs</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
-  
 </head>
 <body>
 
@@ -23,6 +22,10 @@
     <button data-page="ranking">🏆 Classement</button>
     <button data-page="planning">📅 Planning</button>
   </nav>
+  <button class="btn-gist-cfg" id="btn-gist-cfg" onclick="openGistModal()" title="Configurer GitHub Gist">
+    <span id="gist-status-dot" class="gist-dot gist-dot--off"></span>
+    Gist
+  </button>
 </header>
 
 <main>
@@ -49,15 +52,11 @@
             <h3 style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--accent);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.8rem;">Équipe A</h3>
             <div class="form-group">
               <label>Joueur 1</label>
-              <select class="form-control" id="setup-a1">
-                <option value="">— Choisir —</option>
-              </select>
+              <select class="form-control" id="setup-a1"><option value="">— Choisir —</option></select>
             </div>
             <div class="form-group" id="setup-a2-group">
               <label>Joueur 2</label>
-              <select class="form-control" id="setup-a2">
-                <option value="">— Choisir —</option>
-              </select>
+              <select class="form-control" id="setup-a2"><option value="">— Choisir —</option></select>
             </div>
           </div>
 
@@ -66,15 +65,11 @@
             <h3 style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--accent3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.8rem;">Équipe B</h3>
             <div class="form-group">
               <label>Joueur 1</label>
-              <select class="form-control" id="setup-b1">
-                <option value="">— Choisir —</option>
-              </select>
+              <select class="form-control" id="setup-b1"><option value="">— Choisir —</option></select>
             </div>
             <div class="form-group" id="setup-b2-group">
               <label>Joueur 2</label>
-              <select class="form-control" id="setup-b2">
-                <option value="">— Choisir —</option>
-              </select>
+              <select class="form-control" id="setup-b2"><option value="">— Choisir —</option></select>
             </div>
           </div>
         </div>
@@ -102,10 +97,8 @@
           <div class="live-badge"><div class="live-dot"></div> LIVE</div>
         </div>
 
-        <!-- Sets -->
         <div class="sets-row" id="sets-row"></div>
 
-        <!-- Teams + Games Score -->
         <div class="score-teams">
           <div class="team-block">
             <div class="team-name" id="team-a-name">Équipe A</div>
@@ -122,14 +115,12 @@
           </div>
         </div>
 
-        <!-- Points within game -->
         <div class="points-display">
           <div class="point-pill" id="point-a">0</div>
           <div class="point-sep">pts</div>
           <div class="point-pill" id="point-b">0</div>
         </div>
 
-        <!-- Score buttons -->
         <div class="score-btns">
           <button class="score-btn score-btn-a" onclick="addPoint('A')">
             <span class="team-label" id="btn-a-label">ÉQUIPE A</span>
@@ -156,7 +147,6 @@
   <div class="page" id="page-history">
     <div class="section-title">Historique <span class="pill" id="history-count">0</span></div>
 
-    <!-- Toolbar de suppression -->
     <div class="history-toolbar">
       <div class="history-toolbar-actions">
         <button class="btn btn-ghost" id="btn-toggle-select" onclick="toggleSelectMode()" style="font-size:.85rem;padding:.5rem 1rem;">☑ Sélectionner</button>
@@ -173,7 +163,7 @@
     </div>
   </div>
 
-  <!-- Barre Undo (globale) -->
+  <!-- Barre Undo -->
   <div id="undo-bar" class="hidden">
     <span id="undo-message">Match supprimé</span>
     <button class="btn-undo" onclick="undoDeleteMatch()">↩ Annuler</button>
@@ -250,6 +240,38 @@
   </div>
 
 </main>
+
+<!-- ═══════════════════ GIST CONFIG MODAL ═══════════════════ -->
+<div class="modal-backdrop" id="gist-modal" style="display:none;">
+  <div class="modal">
+    <div class="modal-title">⚙ Connexion GitHub Gist</div>
+    <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:1.2rem;line-height:1.6;">
+      Les données seront synchronisées dans un Gist GitHub privé.<br>
+      Le token ne quitte jamais votre navigateur.
+    </p>
+
+    <div class="form-group">
+      <label>Personal Access Token <span style="color:var(--lose)">*</span></label>
+      <input type="password" class="form-control" id="cfg-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+      <div style="font-size:.75rem;color:var(--text-dim);margin-top:.3rem;">
+        Nécessite le scope <code style="color:var(--accent)">gist</code> —
+        <a href="https://github.com/settings/tokens/new?scopes=gist&description=PadelTrack" target="_blank" style="color:var(--accent3)">Créer un token</a>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Gist ID <span style="color:var(--text-dim)">(vide = nouveau Gist créé automatiquement)</span></label>
+      <input type="text" class="form-control" id="cfg-gist-id" placeholder="ex: a1b2c3d4e5f6…" autocomplete="off">
+    </div>
+
+    <div id="gist-modal-status" style="font-size:.82rem;min-height:1.2rem;margin-bottom:.5rem;"></div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="gist-modal-cancel-btn" onclick="closeGistModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveGistConfig()">💾 Enregistrer & Synchroniser</button>
+    </div>
+  </div>
+</div>
 
 <!-- WINNER OVERLAY -->
 <div class="winner-overlay" id="winner-overlay" style="display:none;">

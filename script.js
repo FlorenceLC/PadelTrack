@@ -8,18 +8,192 @@ let state = {
   currentMatch: null
 };
 
-const POINTS = ['0','15','30','40','AD'];
 
-// ─── LOAD / SAVE ───
+const POINTS = ['0','15','30','40','AD'];
+const LS_KEY  = 'padeltrack';
+const LS_GIST = 'padeltrack_gist';
+const GIST_FILENAME = 'padeltrack.json';
+
+// ═════════════════════════════════════════════════════════════
+//  GIST — CONFIG
+// ═════════════════════════════════════════════════════════════
+
+function getGistConfig() {
+  try { return JSON.parse(localStorage.getItem(LS_GIST)) || null; }
+  catch { return null; }
+}
+function setGistConfig(token, gistId) {
+  localStorage.setItem(LS_GIST, JSON.stringify({ token, gistId }));
+}
+function setGistDot(status) {
+  const dot = document.getElementById('gist-status-dot');
+  if (!dot) return;
+  dot.className = `gist-dot gist-dot--${status}`;
+}
+function setModalStatus(msg, color) {
+  color = color || 'var(--text-muted)';
+  const el = document.getElementById('gist-modal-status');
+  if (el) { el.textContent = msg; el.style.color = color; }
+}
+function openGistModal() {
+  const cfg = getGistConfig();
+  if (cfg) {
+    document.getElementById('cfg-token').value   = cfg.token   || '';
+    document.getElementById('cfg-gist-id').value = cfg.gistId  || '';
+  }
+  setModalStatus('');
+  document.getElementById('gist-modal-cancel-btn').style.display = cfg ? '' : 'none';
+  document.getElementById('gist-modal').style.display = 'flex';
+}
+function closeGistModal() {
+  document.getElementById('gist-modal').style.display = 'none';
+}
+async function saveGistConfig() {
+  const token  = document.getElementById('cfg-token').value.trim();
+  const gistId = document.getElementById('cfg-gist-id').value.trim();
+  if (!token) { setModalStatus('Le token est obligatoire.', 'var(--lose)'); return; }
+  setModalStatus('Connexion en cours...', 'var(--accent3)');
+  try {
+    let resolvedId = gistId;
+    if (!resolvedId) {
+      resolvedId = await createGist(token);
+      document.getElementById('cfg-gist-id').value = resolvedId;
+      setModalStatus('Gist cree : ' + resolvedId, 'var(--win)');
+    } else {
+      await fetchGist(token, resolvedId);
+      setModalStatus('Connexion reussie !', 'var(--win)');
+    }
+    setGistConfig(token, resolvedId);
+    setGistDot('ok');
+    await loadStateFromGist();
+    setTimeout(closeGistModal, 1200);
+  } catch (err) {
+    setModalStatus('Erreur : ' + err.message, 'var(--lose)');
+    setGistDot('error');
+  }
+}
+
+// ═════════════════════════════════════════════════════════════
+//  GIST — API
+// ═════════════════════════════════════════════════════════════
+
+const GIST_API = 'https://api.github.com/gists';
+
+async function createGist(token) {
+  const res = await fetch(GIST_API, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      description: 'PadelTrack — donnees application',
+      public: false,
+      files: { [GIST_FILENAME]: { content: JSON.stringify({ players:[], matches:[], planned:[] }) } }
+    })
+  });
+  if (!res.ok) throw new Error('GitHub API ' + res.status + ' — verifiez le token (scope gist requis)');
+  const data = await res.json();
+  return data.id;
+}
+
+async function fetchGist(token, gistId) {
+  const res = await fetch(GIST_API + '/' + gistId, {
+    headers: { Authorization: 'Bearer ' + token }
+  });
+  if (res.status === 404) throw new Error('Gist introuvable — verifiez le Gist ID');
+  if (!res.ok) throw new Error('GitHub API ' + res.status);
+  const data = await res.json();
+  const file = data.files[GIST_FILENAME];
+  if (!file) throw new Error('Fichier "' + GIST_FILENAME + '" absent du Gist');
+  return JSON.parse(file.content);
+}
+
+async function pushGist(token, gistId) {
+  const payload = { players: state.players, matches: state.matches, planned: state.planned };
+  const res = await fetch(GIST_API + '/' + gistId, {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      files: { [GIST_FILENAME]: { content: JSON.stringify(payload) } }
+    })
+  });
+  if (!res.ok) throw new Error('GitHub API ' + res.status);
+}
+
+// ═════════════════════════════════════════════════════════════
+//  LOAD / SAVE — hybride localStorage + Gist
+// ═════════════════════════════════════════════════════════════
+
 function loadState() {
   try {
-    const s = localStorage.getItem('padeltrack');
-    if (s) state = JSON.parse(s);
+    const s = localStorage.getItem(LS_KEY);
+    if (s) state = Object.assign({}, state, JSON.parse(s));
   } catch(e) {}
+
+  const cfg = getGistConfig();
+  if (cfg) {
+    setGistDot('syncing');
+    loadStateFromGist().catch(function() { setGistDot('error'); });
+  } else {
+    setGistDot('off');
+    if (!localStorage.getItem(LS_KEY)) {
+      setTimeout(openGistModal, 600);
+    }
+  }
 }
+
+async function loadStateFromGist() {
+  const cfg = getGistConfig();
+  if (!cfg) return;
+  setGistDot('syncing');
+  try {
+    const remote = await fetchGist(cfg.token, cfg.gistId);
+    state.players = remote.players || state.players;
+    state.matches = remote.matches || state.matches;
+    state.planned = remote.planned || state.planned;
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      players: state.players, matches: state.matches, planned: state.planned
+    }));
+    refreshAllViews();
+    setGistDot('ok');
+  } catch (err) {
+    console.warn('Gist load error:', err);
+    setGistDot('error');
+    toast('Synchro Gist echouee : ' + err.message, 'error');
+  }
+}
+
 function saveState() {
-  localStorage.setItem('padeltrack', JSON.stringify(state));
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      players: state.players, matches: state.matches, planned: state.planned
+    }));
+  } catch(e) {}
+
+  const cfg = getGistConfig();
+  if (!cfg) return;
+  setGistDot('syncing');
+  pushGist(cfg.token, cfg.gistId)
+    .then(function() { setGistDot('ok'); })
+    .catch(function(err) {
+      console.warn('Gist save error:', err);
+      setGistDot('error');
+      toast('Synchro Gist echouee : ' + err.message, 'error');
+    });
 }
+
+function refreshAllViews() {
+  const activePage = (document.querySelector('.page.active') || {}).id;
+  if (activePage) activePage.replace('page-', '');
+  document.getElementById('history-count').textContent = state.matches.length;
+  document.getElementById('players-count').textContent = state.players.length;
+  populateSelects();
+  const page = activePage ? activePage.replace('page-', '') : '';
+  if (page === 'history')  renderHistory();
+  if (page === 'players')  renderPlayers();
+  if (page === 'ranking')  renderRanking();
+  if (page === 'planning') renderPlanned();
+}
+
+
 
 // ─── TOAST ───
 function toast(msg, type='success') {
@@ -685,3 +859,4 @@ document.getElementById('plan-date').value = now.toISOString().slice(0,16);
 
 // Resume match if was in progress (page reload)
 // (not implemented for simplicity — matches are atomic)
+</script>
