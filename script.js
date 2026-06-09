@@ -859,4 +859,3 @@ document.getElementById('plan-date').value = now.toISOString().slice(0,16);
 
 // Resume match if was in progress (page reload)
 // (not implemented for simplicity — matches are atomic)
-</script>
